@@ -1,0 +1,84 @@
+# Root docker-compose.yml
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5174:80" # Vite dev server runs on 5173, Nginx in Dockerfile serves on 80
+    restart: unless-stopped
+    depends_on:
+      - backend 
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=gouser
+      - DB_PASSWORD=gopassword
+      - DB_NAME=medicaldb
+    restart: unless-stopped
+    volumes:
+      - backend_uploads:/app/uploads 
+
+  db:
+    image: postgres:13-alpine
+    ports:
+      - "5433:5432" 
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=gouser
+      - POSTGRES_PASSWORD=gopassword
+      - POSTGRES_DB=medicaldb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gouser -d medicaldb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  ml-trainer:
+    build:
+      context: ./ml-trainer 
+      dockerfile: Dockerfile 
+    # To enable GPU access, you need the NVIDIA Container Toolkit installed on your Docker host.
+    # https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+    runtime: nvidia # This tells Docker to use the NVIDIA runtime
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all # Makes all GPUs visible to the container
+      # You might need to pass DB connection details if train.py needs them
+      # - DB_HOST=db
+      # - DB_USER=gouser
+      # - DB_PASSWORD=gopassword
+      # - DB_NAME=medicaldb
+    volumes:
+      - backend_uploads:/app/training_images # Mount the shared volume to access uploaded images
+      - ml_data:/app/data # Volume for storing trained models, logs, etc.
+    depends_on:
+      - db # If it needs to read from DB (e.g., image metadata, labels)
+      - backend # If it needs to signal backend or backend triggers it and waits
+    # The command to run. This will execute your training script.
+    # For development, you might want to override this to 'sleep infinity' and exec into the container.
+    command: ["python", "train.py"] 
+    # Training is often a one-off task or triggered on demand.
+    # 'no' means it won't restart automatically.
+    # 'on-failure' could be used if you want it to retry a few times.
+    restart: "no" 
+    # tty: true # Not usually needed for a script, but can be useful for interactive debugging
+    # stdin_open: true # if you need to attach to it
+
+volumes:
+  postgres_data:
+  backend_uploads: # Named volume for image uploads, shared between backend and ml-trainer
+  ml_data: # New named volume for ML trainer outputs (models, logs, etc.)
