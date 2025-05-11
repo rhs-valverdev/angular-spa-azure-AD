@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080" # Exposes port 8080 on host to port 8080 in container
+    depends_on:
+      db:
+        condition: service_healthy # Wait for DB to be healthy
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=gouser
+      - DB_PASSWORD=gopassword
+      - DB_NAME=medicaldb
+    restart: unless-stopped
+
+  db:
+    image: postgres:13-alpine
+    ports:
+      - "5433:5432" # Exposes port 5432 in container to 5433 on host (to avoid conflict if you have local postgres on 5432)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Persist data
+    environment:
+      - POSTGRES_USER=gouser
+      - POSTGRES_PASSWORD=gopassword
+      - POSTGRES_DB=medicaldb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gouser -d medicaldb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data: # Defines the named volume for data persistence

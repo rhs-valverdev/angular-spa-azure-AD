@@ -1,0 +1,15 @@
+# TensorFlow is included in the base image, but you might list a specific version
+# if you weren't using a pre-built TF image or needed to pin it.
+# tensorflow==2.15.0 
+
+# For image manipulation (optional, but often useful)
+Pillow
+
+# If you need to connect to PostgreSQL from the trainer (e.g., to update training status)
+# psycopg2-binary
+
+# Add other Python libraries your training script might need:
+# numpy
+# pandas
+# scikit-learn
+# matplotlib
